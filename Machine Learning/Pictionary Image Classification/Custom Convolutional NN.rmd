@@ -1,0 +1,181 @@
+---
+title: "ETC3250 Project"
+author: Shlok Thakur
+output: html_document
+editor_options: 
+  chunk_output_type: inline
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE,
+  eval = TRUE,
+  message = FALSE,
+  warning = FALSE)
+```
+
+
+## Convolutional Neural Network (CNN) Custom 1 - Loop 6 times
+```{r}
+library(tidyverse) 
+library(dplyr) 
+library(keras)
+library(caret)
+library(data.table)
+library(magrittr)
+library(Metrics)
+library(gridExtra)
+
+
+## Load data
+load("data/sketches_train.rda") 
+load("data/sketches_test.rda") 
+
+for (i in 1:4){
+
+    # 1. Data preparation
+    
+    ## Shuffle rows
+    rows <- sample(nrow(sketches))
+    sketches <- sketches[rows, ]
+    
+    ## Training, validation and test set
+    tr_indx <- createDataPartition(sketches$word, p=0.90)$Resample1
+    train <- sketches[tr_indx, c(1:785)]
+    val <- sketches[-tr_indx, c(1:785)]
+    
+    ## Conversion of training and validation data
+    train_x <- as.matrix(train[1:784])
+    train_y <- as.integer(factor(train$word)) - 1
+    val_x <- as.matrix(val[1:784]) 
+    val_y <- as.integer(factor(val$word)) - 1
+    
+    ## Rename columns 
+    colnames(train_x) <- paste0("V", 1:ncol(train_x))
+    colnames(val_x) <- paste0("V", 1:ncol(val_x))
+    
+    ## Redefine (reshape) dimension of train/val/test inputs
+    train_x <- array_reshape(train_x, c(-1, 28, 28, 1))
+    val_x <- array_reshape(val_x, c(-1, 28, 28, 1))
+    
+    ## Standardize feature values
+    train_x <- train_x / 255
+    val_x <- val_x / 255
+    p <- ncol(train_x)
+    
+    cat('train shape ', dim(train_x), '\n')
+    cat('val shape ', dim(val_x), '\n')
+    
+    ## One-hot encode response (convert target variable to class matrix)
+    train_y <- to_categorical(train_y, 6)
+    val_y <- to_categorical(val_y, 6)
+    
+    
+    # 2. CNN
+    
+    ## Define model
+    model <- keras_model_sequential() %>%
+      layer_conv_2d(filters = 128, kernel_size = c(3,3), activation = 'relu', padding = 'same',
+                    input_shape = c(28, 28, 1)) %>% 
+      layer_conv_2d(filters = 128, kernel_size = c(3,3), activation = 'relu', padding = 'same') %>%  
+      layer_batch_normalization() %>%
+      layer_max_pooling_2d(pool_size = c(2, 2)) %>%
+      layer_dropout(rate = 0.3) %>% 
+    
+      layer_conv_2d(filters = 256, kernel_size = c(8,8), activation = 'relu', padding = 'same') %>% 
+      layer_conv_2d(filters = 256, kernel_size = c(8,8), activation = 'relu', padding = 'same') %>% 
+      layer_batch_normalization() %>%
+      layer_max_pooling_2d(pool_size = c(2, 2)) %>%
+      layer_dropout(rate = 0.3) %>% 
+      
+      layer_flatten() %>%
+      layer_dense(units = 128, activation = 'relu') %>%
+      layer_dropout(rate = 0.4) %>%
+      layer_dense(units = 64, activation = 'relu') %>%
+      layer_dense(units = 6, activation = 'softmax')
+    
+    ## Compile model
+    model %>% compile(
+      loss = "categorical_crossentropy",
+      optimizer = 'adam',
+      metrics = "accuracy")
+    
+    ## Save nest model call back
+    checkpoint_dir <- "checkpoints"
+    dir.create(checkpoint_dir, showWarnings = FALSE)
+    filepath <- file.path(checkpoint_dir, paste0('C1-',i,'.hdf5'))
+    
+    ## Create checkpoint callback
+    cp_callback <- callback_model_checkpoint(
+      filepath = filepath,
+      monitor = "val_accuracy",
+      save_best_only = TRUE,
+      mode = 'max',
+      verbose = 1
+    )
+    
+    
+    
+    ## Data Augmentation
+    ## Train model
+    batchsize <- 32
+    datagen <- image_data_generator(featurewise_center=FALSE,  # set input mean to 0 over the dataset
+                                     samplewise_center=FALSE,  # set each sample mean to 0
+                                     featurewise_std_normalization=FALSE,  # divide inputs by std of the dataset
+                                     samplewise_std_normalization=FALSE,  # divide each input by its std
+                                     zca_whitening=FALSE,  # apply ZCA whitening
+                                     rotation_range=10,  # randomly rotate images in the range (degrees, 0 to 180)
+                                     zoom_range = 0.1, # Randomly zoom image 
+                                     width_shift_range=0.1,  # randomly shift images horizontally (fraction of total width)
+                                     height_shift_range=0.1,  # randomly shift images vertically (fraction of total height)
+                                     horizontal_flip=FALSE,  # randomly flip images
+                                     vertical_flip=FALSE)  # randomly flip images
+    
+    history <- model %>% fit_generator(flow_images_from_data(x=train_x, y=train_y, generator=datagen, batch_size = batchsize), 
+                                       epochs = 50,
+                                       verbose = 1,
+                                       validation_data = list(val_x, val_y),
+                                       steps_per_epoch = as.integer(nrow(train_x) / batchsize),
+                                       callbacks = list(cp_callback))
+
+}
+```
+
+```{r}
+avg_pixel <- sketches %>% group_by(word) %>% summarise_if(is.numeric,mean) %>% select(-id)
+
+banana_avg_pixel <- avg_pixel %>% filter(word == "banana")
+banana_matrix = matrix(unlist(banana_avg_pixel[,2:785]),nrow=28,ncol=28)
+
+boom_avg_pixel <- avg_pixel %>% filter(word == "boomerang")
+boom_matrix = matrix(unlist(boom_avg_pixel[,2:785]),nrow=28,ncol=28)
+
+cactus_avg_pixel <- avg_pixel %>% filter(word == "cactus")
+cactus_matrix = matrix(unlist(cactus_avg_pixel[,2:785]),nrow=28,ncol=28)
+
+crab_avg_pixel <- avg_pixel %>% filter(word == "crab")
+crab_matrix = matrix(unlist(crab_avg_pixel[,2:785]),nrow=28,ncol=28)
+
+ff_avg_pixel <- avg_pixel %>% filter(word == "flip flops")
+ff_matrix = matrix(unlist(ff_avg_pixel[,2:785]),nrow=28,ncol=28)
+
+kang_avg_pixel <- avg_pixel %>% filter(word == "kangaroo")
+kang_matrix = matrix(unlist(kang_avg_pixel[,2:785]),nrow=28,ncol=28)
+
+pheatmap(banana_matrix, display_numbers = F)
+pheatmap(boom_matrix, display_numbers = F)
+pheatmap(cactus_matrix, display_numbers = F)
+pheatmap(crab_matrix, display_numbers = F)
+pheatmap(ff_matrix, display_numbers = F)
+pheatmap(kang_matrix, display_numbers = F)
+
+
+```
+
+
+
+
+
+
+
+
+
