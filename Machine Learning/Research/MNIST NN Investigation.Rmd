@@ -1,0 +1,396 @@
+---
+title: "Assignment 3"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+set.seed(1)
+library(heatmaply)
+library(RColorBrewer)
+library(ggplot2)
+library(tidyr)
+library(keras)
+library(tensorflow)
+tf$random$set_seed(1)
+```
+
+```{r}
+set.seed(1)
+mnist <- dataset_mnist()
+x_train <- mnist$train$x
+y_train <- mnist$train$y
+x_test <- mnist$test$x
+y_test <- mnist$test$y
+
+# reshape
+x_train <- array_reshape(x_train, c(nrow(x_train), 784))
+x_test <- array_reshape(x_test, c(nrow(x_test), 784))
+# rescale
+x_train <- x_train / 255
+x_test <- x_test / 255
+
+y_train <- to_categorical(y_train, 10)
+y_test <- to_categorical(y_test, 10)
+
+```
+
+Exercise 1
+```{r}
+tf$random$set_seed(1)
+
+model <- keras_model_sequential() 
+model %>% 
+  layer_dense(units = 256, activation = 'relu', input_shape = c(794)) %>% 
+  layer_dropout(rate = 0.4) %>% 
+  layer_dense(units = 128, activation = 'relu') %>%
+  layer_dropout(rate = 0.3) %>%
+  layer_dense(units = 10, activation = 'softmax')
+
+
+model %>% compile(
+  loss = 'categorical_crossentropy',
+  optimizer = optimizer_rmsprop(),
+  metrics = c('accuracy')
+)
+
+history <- model %>% fit(
+  x_train, y_train, 
+  epochs = 30, batch_size = 128, 
+  validation_split = 0.2
+)
+
+
+model %>% evaluate(x_test, y_test)
+
+tf$compat$v1$get_default_graph()
+
+```
+
+
+Question 1
+a)
+```{r}
+tf$random$set_seed(1)
+
+model1 <- keras_model_sequential() 
+model1 %>% 
+  layer_dense(units = 128, activation = 'relu', input_shape = c(784)) %>% 
+  layer_dropout(rate = 0.4) %>% 
+  layer_dense(units = 64, activation = 'relu') %>%
+  layer_dropout(rate = 0.3) %>%
+  layer_dense(units = 10, activation = 'softmax')
+
+
+
+model1 %>% compile(
+  loss = 'categorical_crossentropy',
+  optimizer = optimizer_rmsprop(),
+  metrics = c('accuracy')
+)
+
+model1_history <- model1 %>% fit(
+  x_train, y_train, 
+  epochs = 30, batch_size = 128, 
+  validation_split = 0.2
+)
+
+model1 %>% evaluate(x_test, y_test)
+
+tf$compat$v1$get_default_graph()
+
+```
+
+The model from exercise 1 has an accuracy of 0.9807 and loss of 0.1131, the model from question 1a has an accuracy of 0.9771 and loss of 0.1211. The two models perform very similar however the model with more units performs slightly better.
+
+```{r}
+tf$random$set_seed(1)
+
+model2 <- keras_model_sequential() 
+model2 %>% 
+  layer_dense(units = 256, activation = 'relu', input_shape = c(784), kernel_regularizer = regularizer_l1(l=0.01)) %>% 
+  layer_dense(units = 128, activation = 'relu', kernel_regularizer = regularizer_l1(l=0.01)) %>%
+  layer_dense(units = 10, activation = 'softmax')
+
+
+
+model2 %>% compile(
+  loss = 'categorical_crossentropy',
+  optimizer = optimizer_rmsprop(),
+  metrics = c('accuracy')
+)
+
+model2_history <- model2 %>% fit(
+  x_train, y_train, 
+  epochs = 30, batch_size = 128, 
+  validation_split = 0.2
+)
+
+model2 %>% evaluate(x_test, y_test)
+
+tf$compat$v1$get_default_graph()
+
+```
+
+
+```{r}
+tf$random$set_seed(1)
+
+model3 <- keras_model_sequential() 
+model3 %>% 
+  layer_dense(units = 256, activation = 'relu', input_shape = c(784)) %>% 
+  layer_dense(units = 128, activation = 'relu') %>%
+  layer_dense(units = 10, activation = 'softmax')
+
+model3 %>% compile(
+  loss = 'categorical_crossentropy',
+  optimizer = optimizer_rmsprop(),
+  metrics = c('accuracy')
+)
+
+model3_history <- model3 %>% fit(
+  x_train, y_train, 
+  epochs = 30, batch_size = 128,
+  callbacks = list(callback_reduce_lr_on_plateau(monitor = "val_loss", factor =0.1)),
+  validation_split = 0.2
+)
+
+model3 %>% evaluate(x_test, y_test)
+
+tf$compat$v1$get_default_graph()
+
+```
+
+```{r}
+
+model1_performance <- model1 %>% evaluate(x_test, y_test)
+
+model2_performance <- model2 %>% evaluate(x_test, y_test)
+
+model3_performance <- model3 %>% evaluate(x_test, y_test)
+
+col1 <- c(model1_performance[1],model2_performance[1],model3_performance[1])
+col2 <- c(model1_performance[2],model2_performance[2],model3_performance[2])
+col3 <- c(1,2,3)
+
+all_performance <- data.frame(col3,col1,col2)
+colnames(all_performance) <- c("Model","Loss","Accuracy")
+
+plot(all_performance$Model,all_performance$Loss, type = "n", xlab = "Model", ylab = "Value",xaxt="n")
+axis(1, at=1:3, labels=c(1,2,3))
+points(all_performance$Model,all_performance$Loss,col="red")
+points(all_performance$Model,all_performance$Accuracy,col="blue")
+
+legend(2.5,2,legend=c("Loss","Accuracy"), col=c("red","blue"),pch=1, ncol=1)
+```
+
+Model 1: Accuracy = 0.977 Loss = 0.121
+
+Model 2: Accuracy = 0.854 Loss = 1.894
+
+Model 3: Accuracy = 0.984 Loss = 0.128
+
+For Model 1, the accuracy is lower and the loss is the same (it is a little smaller) compared to Model 3, thus is is a similar or perhaps worse model comparatively. It has much higher accuracy and lower loss compared to Model 2, therefore is a better model comparatively.
+
+For Model 2, the accuracy is lower and the loss is higher compared to both Model 1 and Model 2, therefore is the worst model clearly out of the 3 models.
+
+For Model 3 (compared to Model 1), the loss is the same (it is a little bigger), accuracy is greater from the introduction of early stopping, as compared to Model 1, therefore a similar or perhaps better model comparatively. It has much higher accuracy and lower loss compared to Model 2, therefore is a better model comparatively.
+
+Question 2
+
+```{r}
+build_model <- function(units,dropout){
+  tf$random$set_seed(1)
+  model <- keras_model_sequential() 
+  model %>% 
+    layer_dense(units = units, activation = 'relu', input_shape = c(784)) %>% 
+    layer_dropout(rate = dropout) %>% 
+    layer_dense(units = 10, activation = 'softmax')
+  
+  model %>% compile(
+    loss = 'categorical_crossentropy',
+    optimizer = optimizer_rmsprop(),
+    metrics = c('accuracy')
+  )
+  
+  set.seed(1)
+
+  history <- model %>% fit(
+    x_train, y_train, 
+    epochs = 30, batch_size = 128, 
+    validation_split = 0.2
+  )
+  set.seed(1)
+  score <- model %>% evaluate(x_test, y_test)
+  loss = score[[1]]
+  
+  tf$compat$v1$get_default_graph()
+
+  return(list(combination = c(units,dropout),loss=loss))
+}
+
+```
+
+
+```{r}
+
+units = c(16, 32, 64,128)
+dropout = c(0, 0.25, 0.5,0.75)
+
+loss_storage <- list()
+
+index = 1
+tf$random$set_seed(1)
+
+for (i in 1:4){
+  for (j in 1:4){
+    set.seed(1)
+    unit_size = units[i]
+    dropout_value = dropout[j]
+
+    loss_storage[[index]] <- build_model(unit_size,dropout_value)
+      
+    index = index + 1
+  }
+}
+
+```
+
+
+```{r}
+units <- c()
+dropouts <- c()
+loss <- c()
+for (i in 1:16){
+  units <- c(units,loss_storage[[i]]$combination[1])
+  dropouts <- c(dropouts,loss_storage[[i]]$combination[2])
+  loss <- c(loss,loss_storage[[i]]$loss[1])
+}
+
+loss_matrix = matrix(loss,ncol=4)
+colnames(loss_matrix) <- c("16","32","64","128")
+rownames(loss_matrix) <- c("0","0.25","0.5","0.75")
+
+heatmaply(loss_matrix,xlab = "Units",ylab= "Dropout")
+```
+
+
+Optimal combination: Unit = 128 and Dropout = 0.25
+
+Suitability of Optimal Combination:
+The optimal value from the grid search cannot be generalised as being the best always for this dataset, it's important to note there is randomness in the intialisation of weights. Due to the seed I have set the initialization is the same for reproducibility. However since the loss is similar for a lot of different combinations, we need to consider that the suitability for the current chosen combination may not be the same best combination for future runs (without a seed), it is unstable as it might change (even keeping training/test set consistent). What we have achieved is still important, it's more than likely that the combination will work 'well' for future randomness and future model building, it just might not be the best but with such insignificant differences I believe we could go with any loss that is below 0.15 and we would get a considerably good model.
+
+Suitability of Grid Values:
+There is an infinite number of different values we could get for both units and dropout values, the values we have chosen out of is chosen arbitrarily. For another scenario, these values would not suit them the best as it does for this current seed, training set and scenario. By scenario I mean a different response + variables for a totally different problem. In another problem that might be simpler, having this many units might prove to overfit the data significantly and a higher dropout layer is required. It's important to understand that the suitability of these grid values don't apply to every situation, it is chosen arbitrarily and machine learners choose them from a set of standard protocols that aren't official formulas or rules, it is just a good possible values based on machine learners experiences. There are also a lot of other hyper parameters that could be tuned such as the different nodes in different layers, different dropout rates for different layers, the learning rate, the batch size and many more. These grid values again to emphasis, aren't suitable for every case, suppose we had more layers we would want to hyper tune the nodes for each layer (not just the first one).
+
+Question 3:
+Momentum
+```{r}
+tf$random$set_seed(1)
+
+model_momentum <- keras_model_sequential() 
+model_momentum %>% 
+  layer_dense(units = 128, activation = 'relu', input_shape = c(784)) %>% 
+  layer_dropout(rate = 0.25) %>% 
+  layer_dense(units = 10, activation = 'softmax')
+
+model_momentum %>% compile(
+  loss = 'categorical_crossentropy',
+  optimizer = optimizer_sgd(),
+  metrics = c('accuracy')
+)
+
+model_momentum_history <- model_momentum %>% fit(
+  x_train, y_train, 
+  epochs = 30, batch_size = 128, 
+  validation_split = 0.2
+)
+
+plot(model_momentum_history)
+
+score <- model_momentum %>% evaluate(x_test, y_test)
+
+cat('Test loss:', score[[1]], '\n')
+cat('Test accuracy:', score[[2]], '\n')
+
+```
+
+ADAM
+```{r}
+tf$random$set_seed(1)
+
+model_adam <- keras_model_sequential() 
+model_adam %>% 
+  layer_dense(units = 128, activation = 'relu', input_shape = c(784)) %>% 
+  layer_dropout(rate = 0.25) %>% 
+  layer_dense(units = 10, activation = 'softmax')
+
+model_adam %>% compile(
+  loss = 'categorical_crossentropy',
+  optimizer = optimizer_adam(),
+  metrics = c('accuracy')
+)
+
+model_adam_history <- model_adam %>% fit(
+  x_train, y_train, 
+  epochs = 30, batch_size = 128, 
+  validation_split = 0.2
+)
+
+plot(model_adam_history)
+
+score <- model_adam %>% evaluate(x_test, y_test)
+
+cat('Test loss:', score[[1]], '\n')
+cat('Test accuracy:', score[[2]], '\n')
+
+```
+
+RMSProp
+```{r}
+tf$random$set_seed(1)
+
+model_rmsprop <- keras_model_sequential() 
+model_rmsprop %>% 
+  layer_dense(units = 128, activation = 'relu', input_shape = c(784)) %>% 
+  layer_dropout(rate = 0.25) %>% 
+  layer_dense(units = 10, activation = 'softmax')
+
+model_rmsprop %>% compile(
+  loss = 'categorical_crossentropy',
+  optimizer = optimizer_rmsprop(),
+  metrics = c('accuracy')
+)
+
+model_rmsprop_history <- model_rmsprop %>% fit(
+  x_train, y_train, 
+  epochs = 30, batch_size = 128, 
+  validation_split = 0.2
+)
+
+
+score <- model_rmsprop %>% evaluate(x_test, y_test)
+
+cat('Test loss:', score[[1]], '\n')
+cat('Test accuracy:', score[[2]], '\n')
+
+```
+
+```{r}
+plot(model_momentum_history)
+
+plot(model_adam_history)
+
+plot(model_rmsprop_history)
+```
+
+Model Momentum: Loss = 0.188513 Accuracy = 0.9472
+
+Model Adam: Loss = 0.0708 Accuracy = 0.9814
+
+Model RMSProp: Loss = 0.0913 Accuracy = 0.9793
+
+The Adam optimiser seems to perform the best on the test accuracy, followed by RMSProp which performs similarly well and Momentum which performs significantly worses. It's interesting to note that Momentum seems to converge the fastest (which may be the reason for oprimizing worst out of the 3) whereas RMSProp and Adam converge at similar epochs. 

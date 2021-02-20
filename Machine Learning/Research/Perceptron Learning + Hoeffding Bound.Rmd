@@ -1,0 +1,368 @@
+---
+title: "Assignment 1"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+
+```
+
+# Exercise 1 
+```{r}
+augment_data <- function(n){
+  x2 = runif(n,min=-3,max=3)
+  x1 = runif(n,min=-3,max=3)
+  x0 = rep(1,n)
+  x_matrix <- as.matrix(rbind(x0,x1,x2))
+  
+  actual_w = c(1,2,3)
+  
+  
+  actual_y<- sign(t(x_matrix) %*% actual_w)
+  
+  new_weights = c(50,1,5)
+  
+  new_y<- sign(t(x_matrix) %*% new_weights)
+  
+  return(list(x_matrix=x_matrix,actual_w=actual_w,actual_y=actual_y,new_weights=new_weights,new_y=new_y))
+}
+
+```
+
+```{r}
+perceptron_learning <- function(x_matrix,actual_w,hyp_weights,n){
+  
+  actual_y <- sign(t(x_matrix) %*% actual_w)
+  new_y <- sign(t(x_matrix) %*% hyp_weights)
+
+  count = 0
+  no_steps = 0
+  
+  misclassified <- which(new_y != actual_y)
+
+  
+  check = FALSE
+  
+  while(check == FALSE){
+    no_steps = no_steps + 1
+    j = sample(misclassified,1)
+    hyp_weights <- hyp_weights + actual_y[j] * x_matrix[,j]
+        
+    new_y<- sign(t(x_matrix) %*% hyp_weights)
+    
+    misclassified <- which(new_y != actual_y)
+
+    if (length(misclassified)==0){
+      check = TRUE
+    }
+  }
+  
+  return(return_vector = list(new_weights = hyp_weights,no_steps = no_steps,new_y = new_y))
+}
+
+```
+
+```{r}
+set.seed(29675952)
+E1_augmented_data <- augment_data(20)
+E1_xmatrix <- E1_augmented_data$x_matrix
+E1_actual_w <- E1_augmented_data$actual_w
+E1_hyp_weights <- E1_augmented_data$new_weights
+E1_actual_y <- E1_augmented_data$actual_y
+
+E1 <- perceptron_learning(E1_xmatrix,E1_actual_w,E1_hyp_weights,20)
+
+#identical(E1$new_y,E1_actual_y)
+```
+
+# Exercise 2 
+a)
+```{r}
+set.seed(1)
+coin_list = c()
+for (i in 1:1000){
+  coin <- sample(c(0,1),replace = TRUE,size=10,prob = c(0.5,0.5))
+  coin_list = c(coin_list,coin)
+}
+coin_matrix <- matrix(coin_list,nrow=10,ncol=1000) 
+mu_c1 = mean(coin_matrix[,1])
+
+min_sum = 0
+min_pos = 0
+for (i in 1:1000){
+  x = sum(coin_matrix[,i])
+  if (x < min_sum)
+    min_sum = x
+    min_pos = i
+}
+mu_cmin = mean(coin_matrix[,min_pos])
+
+rand_pos = sample(1:1000,size=1)
+mu_crand = mean(coin_matrix[,rand_pos])
+```
+
+b)
+```{r}
+v1 = c()
+vmin = c()
+vrand = c()
+
+for (j in 1:1000){
+  #print(j)
+  coin_list = c()
+  for (i in 1:1000){
+    coin <- sample(c(0,1),replace = TRUE,size=10,prob = c(0.5,0.5))
+    coin_list = c(coin_list,coin)
+  }
+  coin_matrix <- matrix(coin_list,nrow=10,ncol=1000) 
+  v_c1 = mean(coin_matrix[,1])
+
+  min_sum = 0
+  min_pos = 0
+  for (i in 1:1000){
+    x = sum(coin_matrix[,i])
+    if (x < min_sum)
+      min_sum = x
+      min_pos = i
+      
+  }
+  v_cmin = mean(coin_matrix[,min_pos])
+  
+  rand_pos = sample(1:1000,size=1)
+  v_crand = mean(coin_matrix[,rand_pos])
+
+  v1 = c(v1,v_c1)
+  vmin = c(vmin,v_cmin)
+  vrand = c(vrand,v_crand)
+}
+
+hist(v1,freq = TRUE,xlab = "v1")
+hist(vmin,freq = TRUE,xlab = "vmin")
+hist(vrand,freq = TRUE, xlab = "vrand")
+
+```
+
+c) capital N = 10
+
+```{r}
+vdf <- as.data.frame(cbind(v1,vrand,vmin))
+
+
+
+hoeffding <- function(eps,v,u){
+  n = length(v)
+  P = length(which(v-u > eps))/n
+  return(P)
+}
+
+epsilons <- c(0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9)
+
+v1_prob <- c()
+vmin_prob <- c()
+vrand_prob <- c()
+
+for (i in 1:9){
+  a = hoeffding(epsilons[i],v1,mu_c1)
+  b = hoeffding(epsilons[i],vmin,mu_cmin)
+  c = hoeffding(epsilons[i],vrand,mu_crand)
+  
+  v1_prob = c(v1_prob,a)
+  vmin_prob = c(vmin_prob,b)
+  vrand_prob = c(vrand_prob,c)
+}
+
+hoeff_bound <- 2 * exp(-2 * epsilons^2 * 10)
+
+df <- data.frame(epsilons,v1_prob,vmin_prob,vrand_prob,hoeff_bound)
+
+df_long <- df %>% pivot_longer(!epsilons,names_to = "v",values_to = "Prob")
+
+ggplot(data=df_long) + geom_line(aes(x=epsilons,y=Prob,color=v),lwd=0.75) + scale_x_continuous(breaks = c(0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9))
+
+
+```
+
+The random coin and coin 1 obey the Hoffding bound. The min coin does not obey the Hoffding bound. The min coin breaks the Hoffding bound validity as the hypothesis for min coin is not fixed before the data set is generated, it is determined after the data set is generated. 
+
+d)
+Hoffdings inequality does not apply to multiple bins. Hoffdings bound will need to take into account the number of bins in order for it to work, however the bound will still only be applicable for coin 1 and random coin. Lets suppose we ask the question the chance of selecting a head from coin 1 and random coin sets, we would just be required to multiply the bound by the number of bins to get a Hoffding bound, however the min coin is biased, it doesn't lie around the population mean because of its properties and therefore the Hoffding bound would be adjusted by an unknown amount for it to be accurate, therefore the Hoffding bound is invalidated with multiple bins for the coin.
+
+# Exercise 3 
+```{r}
+library(ggplot2)
+
+draw_plot <- function(hyp_weights,x_matrix,y_real_values){
+target_w0 = 1
+target_w1 = 2
+target_w2 = 3
+
+target_slope = -(target_w0/target_w2)/(target_w0/target_w1)  
+target_intercept = -target_w0/target_w2
+
+hyp_w0 = hyp_weights[1]
+hyp_w1 = hyp_weights[2]
+hyp_w2 = hyp_weights[3]
+
+hyp_slope = -(hyp_w0/hyp_w2)/(hyp_w0/hyp_w1)  
+hyp_intercept = -hyp_w0/hyp_w2
+
+x1 = x_matrix[2,]
+x2 = x_matrix[3,]
+actual_y = y_real_values
+
+df <- as.data.frame(cbind(x1,x2,actual_y))
+colnames(df) <- c("x1","x2","y")
+
+df$y <- factor(df$y)
+
+ggplot(data=df,aes(x=x1,y=x2,colour=y)) + geom_point() + geom_abline(aes(slope=target_slope,intercept=target_intercept)) +
+geom_abline(aes(slope=hyp_slope,intercept=hyp_intercept),color="blue") +
+annotate("text",x=-2,y=-2,label = "Hypothesis Line",colour="blue") +
+annotate("text",x=2,y=2,label = "True Line")
+}
+```
+
+a,b)
+```{r}
+E1_new_weights = E1$new_weights
+draw_plot(E1_new_weights,E1_xmatrix,E1_actual_y)
+E1_no_steps = E1$no_steps
+```
+f is somewhat close to g, f is essentially on the tip of the -1 class, the algorithm stopped as soon as it saw we are finally classifying correctly, it stopped bringing the line f closer to the true line g. In summary f will usually be on the tip of a point of a class that is linearly seperatable. 
+
+c)
+```{r}
+set.seed(1)
+c_data_augment <- augment_data(20)
+c_xmatrix <- c_data_augment$x_matrix
+c_actual_w <- c_data_augment$actual_w
+c_new_weights <- c_data_augment$new_weights
+c_actual_y <- c_data_augment$actual_y
+
+c <- perceptron_learning(c_xmatrix,c_actual_w,c_new_weights,20)
+
+c_new_weights = c$new_weights
+draw_plot(c_new_weights,c_xmatrix,c_actual_y)
+c_no_step = c$no_steps
+```
+
+d)
+```{r}
+set.seed(1)
+d_data_augment <- augment_data(100)
+d_xmatrix <- d_data_augment$x_matrix
+d_actual_w <- d_data_augment$actual_w
+d_new_weights <- d_data_augment$new_weights
+d_actual_y <- d_data_augment$actual_y
+
+d <- perceptron_learning(d_xmatrix,d_actual_w,d_new_weights,100)
+
+d_new_weights = d$new_weights
+draw_plot(d_new_weights,d_xmatrix,d_actual_y)
+d_no_step = d$no_steps
+
+```
+
+e)
+```{r}
+set.seed(1)
+e_data_augment <- augment_data(1000)
+e_xmatrix <- e_data_augment$x_matrix
+e_actual_w <- e_data_augment$actual_w
+e_new_weights <- e_data_augment$new_weights
+e_actual_y <- e_data_augment$actual_y
+
+e <- perceptron_learning(e_xmatrix,e_actual_w,e_new_weights,1000)
+
+e_new_weights = e$new_weights
+draw_plot(e_new_weights,e_xmatrix,e_actual_y)
+e_no_step = e$no_steps
+
+```
+
+f)
+
+```{r}
+new_augment_data <- function(n){
+  x9 = runif(n,min=-3,max=3)
+  x8 = runif(n,min=-3,max=3)
+  x7 = runif(n,min=-3,max=3)
+  x6 = runif(n,min=-3,max=3)
+  x5 = runif(n,min=-3,max=3)
+  x4 = runif(n,min=-3,max=3)
+  x3 = runif(n,min=-3,max=3)
+  x2 = runif(n,min=-3,max=3)
+  x1 = runif(n,min=-3,max=3)
+  x0 = rep(1,n)
+  x_matrix <- as.matrix(rbind(x0,x1,x2,x3,x4,x5,x6,x7,x8,x9))
+  
+  actual_w = c(1,2,3,4,5,6,7,8,9,10)
+  
+  
+  actual_y<- sign(t(x_matrix) %*% actual_w)
+  
+  new_weights = c(1,1,5,50,1,5,50,1,5,10)
+  
+  new_y<- sign(t(x_matrix) %*% new_weights)
+  
+  return(list(x_matrix=x_matrix,actual_w=actual_w,actual_y=actual_y,new_weights=new_weights,new_y=new_y))
+}
+
+```
+
+```{r}
+set.seed(1)
+f_data_augment <- new_augment_data(1000)
+f_xmatrix <- f_data_augment$x_matrix
+f_actual_w <- f_data_augment$actual_w
+f_new_weights <- f_data_augment$new_weights
+f_actual_y <- f_data_augment$actual_y
+
+f <- perceptron_learning(f_xmatrix,f_actual_w,f_new_weights,1000)
+
+f_new_weights = f$new_weights
+f_no_step = f$no_steps
+
+f_no_step
+#identical(f$new_y,f_actual_y)
+```
+It takes 7799 steps
+
+g)
+```{r}
+no_iterations = c()
+set.seed(1)
+
+for (i in 1:100){
+  f_data_augment <- new_augment_data(1000)
+  f_xmatrix <- f_data_augment$x_matrix
+  f_actual_w <- f_data_augment$actual_w
+  f_new_weights <- f_data_augment$new_weights
+  f_actual_y <- f_data_augment$actual_y
+  
+  f <- perceptron_learning(f_xmatrix,f_actual_w,f_new_weights,1000)
+  
+  f_new_weights = f$new_weights
+  f_no_step = f$no_steps
+  no_iterations = c(no_iterations,f_no_step)
+}
+
+```
+
+```{r}
+hist(no_iterations,freq = TRUE)
+
+```
+
+As N increases, our hypothesis line gets closer to the true line. However as N also increases the time complexity (running time) also increases. Likewise for d, as d increases our accuracy also increases (as the number dimensions our hypothesis is able to capture increases), whereas as time complexity also increases. 
+
+Assuming the time complexity of the which function in R is O(N) to search through a vector of size N. 
+Assume the time complexity for dot product is also O(N) where N is the length of 2 vectors (identical size N)
+Assuming my while condition goes searches N times as the upper bound where N is the size of the vector.
+The time complexity of my perceptron algorithm would be O(N*d + N^2). Here both d and N increase our time complexity however, as you can see an increase in N has a bigger impact on the time complexity, relatively.
+

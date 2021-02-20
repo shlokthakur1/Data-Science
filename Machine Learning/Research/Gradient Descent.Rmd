@@ -1,0 +1,219 @@
+---
+title: "Assignment 2"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(digits = 10)
+```
+
+Linear In-Sample Error
+```{r}
+Ein_linreg <- function(X, y, w){
+  N = length(y)
+  p = length(w)
+  
+  y = matrix(y,nrow = N)
+  w = matrix(w,nrow = p)
+  X = matrix(X, nrow = N,ncol = p)
+  
+  Ein_vector = c()
+  for (i in 1:N){
+    h = (t(w) %*% X[i,])
+    value = (h - y[i,])^2
+    Ein_vector = c(Ein_vector,value)
+  }
+  
+  return(mean(Ein_vector))
+}
+
+```
+
+
+```{r}
+Ein_logreg <- function(X, y, w){
+  N = length(y)
+  p = length(w)
+  
+  y = matrix(y,nrow = N)
+  w = matrix(w,nrow = p)
+  X = matrix(X, nrow = N,ncol = p)
+  
+  Ein_vector = c()
+  
+  y = matrix(y,nrow = N)
+  w = matrix(w,nrow =)
+  
+  for (i in 1:N){
+    h = -y[i,] %*% t(w) %*% X[i,]
+    value = log(1+exp(h))
+    Ein_vector = c(Ein_vector,value)
+  }
+  
+  return(mean(Ein_vector))
+}
+
+```
+
+
+Linear Gradient Function
+```{r}
+gEin_linreg <- function(X, y, w){
+  N = length(y)
+  p = length(w)
+  
+  y = matrix(y,nrow = N)
+  w = matrix(w,nrow = p)
+  X = matrix(X, nrow = N,ncol = p)
+  
+  grad_vector = c()
+  
+  y = matrix(y,nrow = N)
+  w = matrix(w,nrow =p)
+  
+  for (i in 1:N){
+    value = 2*(X[i,]) %*% (t(w) %*% X[i,] - y[i,])
+    grad_vector = c(grad_vector,value)
+  }
+  
+  grad_matrix = matrix(grad_vector,ncol=N)
+  return(rowMeans(grad_matrix))
+}
+
+```
+
+
+Logistic Gradient Function
+```{r}
+sigmoid <- function(x){
+  y = 1/(1+exp(-x))
+  return(y)
+}
+
+gEin_logreg <- function(X, y, w){
+  N = length(y)
+  p = length(w)
+  
+  y = matrix(y,nrow = N)
+  w = matrix(w,nrow = p)
+  X = matrix(X, nrow = N,ncol = p)
+  
+  grad_vector = c()
+  
+  for (i in 1:N){
+    h <- -y[i,] %*% t(w) %*% X[i,]
+    m = sigmoid(h)[1]
+    value = (-y[i,] %*% X[i,]) * m
+    
+    grad_vector = c(grad_vector,value)
+  }
+
+    grad_matrix = matrix(grad_vector,ncol = N)
+  return(rowMeans(grad_matrix))
+  
+}
+
+```
+
+
+Gradient Descent
+```{r}
+GD <- function(X, y, Ein, gEin, w0, eta, precision, nb_iters){
+  allw <- vector("list", nb_iters)
+  cost <- numeric(nb_iters)
+  allw[[1]] <- w0
+  cost[1] <- Ein(X, y, allw[[1]])
+
+  for (i in 2:nb_iters){
+    step_size <- gEin(X,y,allw[[i-1]])
+    allw[[i]] <- allw[[i-1]] - eta * step_size
+    
+    cost[i] <- Ein(X, y, allw[[i]])
+    
+    diff = abs(cost[i]-cost[i-1])
+    if (diff < precision){
+      cost[nb_iters] = cost[i]
+      allw[[nb_iters]] = allw[[i]]
+      break
+    }
+  }
+  
+  list(allw = allw, cost = cost)
+}
+```
+
+
+Linear Gradient Descent
+```{r}
+set.seed(1900)
+# Function taken from Friedman et al.
+genx <- function(n,p,rho){
+# generate x's multivariate normal with equal corr rho
+# Xi = b Z + Wi, and Z, Wi are independent normal.
+# Then Var(Xi) = b^2 + 1
+# Cov(Xi, Xj) = b^2 and so cor(Xi, Xj) = b^2 / (1+b^2) = rho
+z <- rnorm(n)
+if(abs(rho) < 1){
+beta <- sqrt(rho/(1-rho))
+x <- matrix(rnorm(n*p), ncol=p)
+A <- matrix(rnorm(n), nrow=n, ncol=p, byrow=F)
+x <- beta * A + x
+}
+if(abs(rho)==1){ x=matrix(rnorm(n),nrow=n,ncol=p,byrow=F)}
+return(x)
+}
+N <- 100
+p <- 10
+rho <- 0.2
+X <- genx(N, p, rho)
+w_true <- ((-1)^(1:p))*exp(-2*((1:p)-1)/20)
+eps <- rnorm(N)
+k <- 3
+y <- X %*% w_true + k * eps
+res <- GD(X, y, Ein_linreg, gEin_linreg, rep(0, p), 0.0001, 0.00000001, 38000)
+plot(res$cost)
+print(w_true)
+print(unlist(tail(res$allw, 1)))
+```
+
+Closed Form Solution:
+```{r}
+X_pseudo = solve((t(X)%*%X))%*% t(X)
+closed_form_w = X_pseudo %*% y
+print(closed_form_w)
+print(unlist(tail(res$allw, 1)))
+```
+As we can see, the gradient descent weights are very similar to the closed form solution, and since the gradient descent solution is iterative, it has a chance to improve towards the true weight however the closer form cannot. It's a very promising sign that the iterative solution has converged towards the closed form solution with minimal optimisation of parameters.
+
+Logistic Gradient Descent
+```{r}
+set.seed(1900)
+N <- 100
+l <- -5; u <- 5
+x <- seq(l, u, by = 0.1)
+w_true <- matrix(c(-3, 1, 1), ncol = 1)
+a <- -w_true[2]/w_true[3]
+b <- -w_true[1]/w_true[3]
+X0 <- matrix(runif(2 * N, l, u), ncol = 2)
+X <- cbind(1, X0)
+y <- sign(X %*% w_true)
+res <- GD(X, y, Ein_logreg, gEin_logreg, rep(0, 3), 0.05, 0.0001, 100)
+plot(res$cost)
+print(w_true)
+w_best <- unlist(tail(res$allw, 1))
+print(w_best)
+plot(c(l, u), c(u, l), type = 'n', xlab = "x1", ylab = "x2")
+lines(x, a*x +b)
+points(X0, col = ifelse(y == 1, "red", "blue"))
+a_best <- -w_best[2]/w_best[3]
+b_best <- -w_best[1]/w_best[3]
+lines(x, a_best*x + b_best, col = "red")
+
+
+
+```
+
+
+
+
